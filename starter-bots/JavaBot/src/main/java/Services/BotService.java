@@ -45,7 +45,7 @@ public class BotService {
         //avoid gas clouds
         var gasCloud = gameState.getGameObjects().stream()
                 .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.GAS_CLOUD)
-                .filter(gameObject -> getDistanceBetween(gameObject, bot) < 50)
+                .filter(gameObject -> getDistanceBetween(gameObject, bot) < 100)
                 .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, bot)))
                 .orElse(null);
         if (gasCloud != null && count == 0) {
@@ -54,6 +54,24 @@ public class BotService {
             System.out.println("tick " + index + ":gas");
             count = 1;
         }
+
+        // nembak musuh
+        var enemyshoot = gameState.getPlayerGameObjects().stream()
+                //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
+                .filter(bot -> bot.id != this.bot.id)
+                //.filter(bot -> getDistanceBetween(bot, this.bot) < 1000)
+                .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot)))
+                .filter(bot -> bot.size > this.bot.size*0.9)
+                //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                .orElse(null);
+
+                if (enemyshoot != null && getDistanceBetween(enemyshoot, this.bot) < 1000 && count == 0 && this.bot.size > 50) {
+                    playerAction.heading = getHeadingBetween(enemyshoot);
+                    playerAction.action = PlayerActions.FIRETORPEDOES;
+                    System.out.println("tick " + index + ": tembak");
+                    count = 1;
+                }
 
         // ngindarin musuh
         
@@ -74,36 +92,36 @@ public class BotService {
         
                 
             if (enemy2 != null && getDistanceBetween(enemy2, this.bot) < 3*enemy2.size && count == 0) {
-                var enemy3 = gameState.getPlayerGameObjects().stream()
-                            //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
-                            .filter(bot -> bot.id != this.bot.id)
-                            // .filter(bot -> getDistanceBetween(bot, this.bot) < 100)
-                            .filter(bot -> getDistanceBetween((bot), this.bot)> getDistanceBetween(enemy2, this.bot))
-                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot)))
-                            .filter(bot -> bot.size*1.2 >= this.bot.size)
-                            //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
-                            .orElse(null);
-                if (index <10) {
+                // var enemy3 = gameState.getPlayerGameObjects().stream()
+                //             //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
+                //             .filter(bot -> bot.id != this.bot.id)
+                //             // .filter(bot -> getDistanceBetween(bot, this.bot) < 100)
+                //             .filter(bot -> getDistanceBetween((bot), this.bot)> getDistanceBetween(enemy2, this.bot))
+                //             .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot)))
+                //             .filter(bot -> bot.size*1.2 >= this.bot.size)
+                //             //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                //             .orElse(null);
+                if (index <100) {
                     playerAction.heading = getHeadingBetween(enemy2)+180;
                     playerAction.action = PlayerActions.FORWARD;
                     System.out.println("tick " + index + ": kabur");
                     count = 1;
                 }
-                else if (index > 10) {
+                else if (index > 100) {
                     double worldRadius = this.gameState.world.radius;
                     if (distanceFromWorldCenter + (1.5*this.bot.size)>worldRadius && index > 10) {
             
-                        playerAction.heading = getHeadingBetween(enemy2)+90;
-                        playerAction.action = PlayerActions.FORWARD;
-                        System.out.println("tick " + index + ": kejepit");
-                        count = 1;
+                        // playerAction.heading = getHeadingBetween(enemy2)+90;
+                        // playerAction.action = PlayerActions.FORWARD;
+                        // System.out.println("tick " + index + ": kejepit");
+                        // count = 1;
                     }
-                    else if (enemy3!=null && getDistanceBetween(enemy3, this.bot) < 3*enemy3.size) {
-                        playerAction.heading = ((getHeadingBetween(enemy3)+getHeadingBetween(enemy2))%360)/2;
-                        playerAction.action = PlayerActions.FORWARD;
-                        System.out.println("tick " + index + ": kabur dari 2");
-                        count = 1;
-                    }
+                    // else if (enemy3!=null && getDistanceBetween(enemy3, this.bot) < 3*enemy3.size) {
+                    //     playerAction.heading = ((getHeadingBetween(enemy3)+getHeadingBetween(enemy2))%360)/2;
+                    //     playerAction.action = PlayerActions.FORWARD;
+                    //     System.out.println("tick " + index + ": kabur dari 2");
+                    //     count = 1;
+                    // }
                     else {
                         playerAction.heading = getHeadingBetween(enemy2)+180;
                         playerAction.action = PlayerActions.FORWARD;
@@ -127,12 +145,14 @@ public class BotService {
                 //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
                 .orElse(null);
 
-                if (enemy != null && getDistanceBetween(enemy, this.bot) < 1000 && count == 0) {
+                if (enemy != null && getDistanceBetween(enemy, this.bot) < 800 && count == 0) {
                     playerAction.heading = getHeadingBetween(enemy);
                     playerAction.action = PlayerActions.FORWARD;
                     System.out.println("tick " + index + ": attack");
                     count = 1;
                 }
+        
+        
 
 
 
@@ -147,9 +167,9 @@ public class BotService {
         
 
         //if distance from world center is greater than world radius, go to center
-        if (index > 10 && count == 0) {
+        if (index > 100 && count == 0) {
             double worldRadius = this.gameState.world.radius;
-            if(distanceFromWorldCenter + (1.5*this.bot.size)>worldRadius) {
+            if(distanceFromWorldCenter*1.2 + (1.7*this.bot.size)>worldRadius) {
                 if (enemy2 != null){
                     playerAction.heading = getHeadingBetween(enemy2)+90;
                     playerAction.action = PlayerActions.FORWARD;
