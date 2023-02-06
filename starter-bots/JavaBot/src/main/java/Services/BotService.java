@@ -43,17 +43,17 @@ public class BotService {
         
 
         //avoid gas clouds
-        var gasCloud = gameState.getGameObjects().stream()
-                .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.GAS_CLOUD)
-                .filter(gameObject -> getDistanceBetween(gameObject, bot) < 100)
-                .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, bot)))
-                .orElse(null);
-        if (gasCloud != null && count == 0) {
-            playerAction.action = PlayerActions.FORWARD;
-            playerAction.heading = getHeadingBetween(gasCloud) + 90;
-            System.out.println("tick " + index + ":gas");
-            count = 1;
-        }
+        // var gasCloud = gameState.getGameObjects().stream()
+        //         .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.GAS_CLOUD)
+        //         .filter(gameObject -> getDistanceBetween(gameObject, bot) < 100)
+        //         .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, bot)))
+        //         .orElse(null);
+        // if (gasCloud != null && count == 0) {
+        //     playerAction.action = PlayerActions.FORWARD;
+        //     playerAction.heading = getHeadingBetween(gasCloud) + 90;
+        //     System.out.println("tick " + index + ":gas");
+        //     count = 1;
+        // }
 
         // nembak musuh
         var enemyshoot = gameState.getPlayerGameObjects().stream()
