@@ -12,6 +12,8 @@ public class BotService {
     private GameState gameState;
     static int kabur = 0;
     static int shoot = 0;
+    static int attack = 0;
+    static int ngejar = 0;
     static int center = 0;
     static int shoottele = 0;
     static int detonate = 0;
@@ -67,6 +69,16 @@ public class BotService {
             //     System.out.println("tick " + tick + ":gas");
             //     count = 1;
             // }
+
+            var enemysmaller = gameState.getPlayerGameObjects().stream()
+                    //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
+                    .filter(bot -> bot.id != this.bot.id)
+                    //.filter(bot -> getDistanceBetween(bot, this.bot) < 1000)
+                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                    .filter(bot -> bot.size < this.bot.size)
+                    //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                    //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                    .orElse(null);
             
             var enemy = gameState.getPlayerGameObjects().stream()
                     //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
@@ -77,39 +89,42 @@ public class BotService {
                     //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
                     //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
                     .orElse(null);
+            if (firetele >= 1  && count == 0) {
+                playerAction.action = PlayerActions.FIRETELEPORT;
+                System.out.println("tick " + tick + ": tembak tele");
+                count = 1;
+                firetele++;
+                if (firetele >= 3) {
+                    firetele = 0;
+                    System.out.println("tick " + tick + ": tembak tele reset");
+                }
+            }
 
-            if (activateshield >= 1) {
+            if (activateshield >= 1 && count == 0) {
                 playerAction.action = PlayerActions.ACTIVATESHIELD;
                 System.out.println("tick " + tick + ": shield");
                 count = 1;
                 activateshield++;
-                if (activateshield == 5) {
+                if (activateshield >= 5) {
                     activateshield = 0;
+                    System.out.println("tick " + tick + ": shield reset");
                 }
             }
 
-            if (detonate >= 1) {
+            if (detonate >= 1 && count == 0 && enemysmaller != null) {
                 playerAction.action = PlayerActions.TELEPORT;
                 System.out.println("tick " + tick + ": detonate");
                 count = 1;
                 detonate++;
-                if (detonate == 5) {
+                if (detonate >= 5) {
                     detonate = 0;
+                    System.out.println("tick " + tick + ": detonate reset");
                 }
             }
 
-            if (firetele >= 1) {
-                playerAction.action = PlayerActions.FIRETELEPORT;
-                System.out.println("tick " + tick + ": fire tele");
-                count = 1;
-                firetele++;
-                if (firetele >= 2) {
-                    firetele = 0;
-                }
-            }
 
             //detonate teleporter
-            if (ticksekarang + teleactivein == this.gameState.world.getCurrentTick() && shoottele >= 1) {
+            if (ticksekarang + teleactivein == this.gameState.world.getCurrentTick() && shoottele >= 1  && count == 0 && enemysmaller != null) {
                 playerAction.action = PlayerActions.TELEPORT;
                 System.out.println("tick " + tick + ": detonate");
                 count = 1;
@@ -146,17 +161,38 @@ public class BotService {
                         //     count = 1;
                         // }
                         // else {
-                            System.out.println("tick distance " + tick + ": " + getDistanceBetween(enemyshoot, this.bot));
-                            if (shoot == 0 || shoot == 1) {
-                                playerAction.heading = getHeadingBetween(enemyshoot);
-                                playerAction.action = PlayerActions.FIRETORPEDOES;
-                                System.out.println("tick " + tick + ": tembak");
-                                count = 1;
-                                shoot++;
+                            System.out.println("tick distance " + tick + ": " + (getDistanceBetween(enemyshoot, this.bot)-this.bot.size-enemyshoot.size));
+                            if (getDistanceBetween(enemyshoot, this.bot) < 200 + this.bot.size + enemyshoot.size) {
+                                if (shoot == 0 || shoot == 1) {
+                                    playerAction.heading = getHeadingBetween(enemyshoot);
+                                    playerAction.action = PlayerActions.FIRETORPEDOES;
+                                    System.out.println("tick " + tick + ": tembak jarak dekat");
+                                    count = 1;
+                                    shoot++;
+                                }
+                                else if (shoot >= 2) {
+                                    shoot = 0;
+                                    System.out.println("tick " + tick + ": tembak jarak dekat dump");
+                                }
                             }
-                            else if (shoot >= 2) {
-                                shoot = 0;
+                            else if (getDistanceBetween(enemyshoot, this.bot) >= 200 + this.bot.size + enemyshoot.size) {
+                                if (shoot == 0 || shoot == 1) {
+                                    playerAction.heading = getHeadingBetween(enemyshoot);
+                                    playerAction.action = PlayerActions.FIRETORPEDOES;
+                                    System.out.println("tick " + tick + ": tembak jarak jauh");
+                                    count = 1;
+                                    shoot++;
+                                }
+                                else if (shoot == 2 || shoot == 3 || shoot == 4) {
+                                    shoot++;
+                                    System.out.println("tick " + tick + ": tembak jarak jauh dump+");
+                                }
+                                else if (shoot >= 5) {
+                                    shoot = 0;
+                                    System.out.println("tick " + tick + ": tembak jarak jauh dump");
+                                }
                             }
+                            
                         
                         
                     }
@@ -202,6 +238,7 @@ public class BotService {
                                 }
                                 else if (center >= 2) {
                                     center = 0;
+                                    System.out.println("tick " + tick + ": center dump");
                                 }
                             }
                         }
@@ -234,6 +271,7 @@ public class BotService {
                         }
                         else if (kabur == 2) {
                             kabur = 0;
+                            System.out.println("tick " + tick + ": kabur dump");
                         }
                     // }
                     // else if (tick >= 100) {
@@ -256,39 +294,71 @@ public class BotService {
                         // }
                     // }
                 }
-
+            
+            //ngejar
+            if (enemy != null && getDistanceBetween(enemy, this.bot) < 250 + this.bot.size + bot.size && count == 0 && shoottele == 0) {
+                if (ngejar == 0 || ngejar == 1) {
+                    playerAction.heading = getHeadingBetween(enemy);
+                    playerAction.action = PlayerActions.FORWARD;
+                    System.out.println("tick " + tick + ": ngejar");
+                    count = 1;
+                    count = 1;
+                    ngejar++;
+                }
+                else if (ngejar >= 2) {
+                    ngejar = 0;
+                    System.out.println("tick " + tick + ": ngejar dump");
+                }
+            }
             
             var enemytele = gameState.getPlayerGameObjects().stream()
                     //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
                     .filter(bot -> bot.id != this.bot.id)
                     //.filter(bot -> getDistanceBetween(bot, this.bot) < 1000)
                     .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
-                    .filter(bot -> bot.size*1.05 + 40 < this.bot.size)
+                    .filter(bot -> bot.size*1.1 + 40 < this.bot.size)
                     //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
                     //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
                     .orElse(null);
             
-            // ngejar musuh
-                    if (enemytele != null && getDistanceBetween(enemy, this.bot) < 300 + this.bot.size + bot.size && this.bot.size > 100 && count == 0 && shoottele == 0) {
-                        playerAction.heading = getHeadingBetween(enemy);
+            // attack nembak musuh
+                    if (enemytele != null && getDistanceBetween(enemytele, this.bot) >= 150 + this.bot.size + bot.size && getDistanceBetween(enemytele, this.bot) < 500 + this.bot.size + bot.size && this.bot.size > 100 && count == 0 && shoottele == 0) {
+                        System.out.println("tick distance " + tick + ": " + (getDistanceBetween(enemy, this.bot)-enemy.size-this.bot.size));
+                        playerAction.heading = getHeadingBetween(enemytele);
                         playerAction.action = PlayerActions.FIRETELEPORT;
                         System.out.println("tick " + tick + ": tembak tele");
                         ticksekarang = this.gameState.world.getCurrentTick();
                         shoottele++;
                         firetele++;
                         activateshield = 1;
-                        teleactivein = (int)(getDistanceBetween(enemy, this.bot)-(enemy.size*0.5)-this.bot.size)/20;
+                        teleactivein = (int)(getDistanceBetween(enemytele, this.bot)-(enemytele.size*0.5)-this.bot.size)/20;
                         count = 1;
                         // playerAction.heading = getHeadingBetween(enemy);
                         // playerAction.action = PlayerActions.FORWARD;
                         // System.out.println("tick " + tick + ": attack");
                         // count = 1;
                     }
-                    else if (enemy != null && getDistanceBetween(enemy, this.bot) < 300 && count == 0) {
-                        playerAction.heading = getHeadingBetween(enemy);
-                        playerAction.action = PlayerActions.FIRETORPEDOES;
-                        System.out.println("tick " + tick + ": attack");
-                        count = 1;
+                    else if (enemy != null && getDistanceBetween(enemy, this.bot) < 150 + this.bot.size + bot.size && count == 0 && shoottele == 0) {
+                        System.out.println("tick distance " + tick + ": " + (getDistanceBetween(enemy, this.bot)-enemy.size-this.bot.size));
+                            if (attack == 0 || attack == 1) {
+                                playerAction.heading = getHeadingBetween(enemy);
+                                playerAction.action = PlayerActions.FIRETORPEDOES;
+                                System.out.println("tick " + tick + ": attack");
+                                count = 1;
+                                attack++;
+                            }
+                            else if (attack == 2 || attack == 3 || attack == 4) {
+                                System.out.println("tick " + tick + ": attackdump+");
+                                attack++;
+                            }
+                            else if (attack >= 5) {
+                                System.out.println("tick " + tick + ": attackdump");
+                                attack = 0;
+                            }
+                        // playerAction.heading = getHeadingBetween(enemy);
+                        // playerAction.action = PlayerActions.FIRETORPEDOES;
+                        // System.out.println("tick " + tick + ": attack");
+                        // count = 1;
                     }
                     
 
@@ -317,17 +387,35 @@ public class BotService {
             //     count = 1;
             // }
 
+
+            var enemydefault = gameState.getPlayerGameObjects().stream()
+                    //.filter(gameObject -> gameObject.gameObjectType == ObjectTypes.PLAYER)
+                    .filter(bot -> bot.id != this.bot.id)
+                    //.filter(bot -> getDistanceBetween(bot, this.bot) < 1000)
+                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                    // .filter(bot -> bot.size < this.bot.size)
+                    //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                    //.filter(bot -> getDistanceBetween(bot, this.bot) < 200)
+                    .orElse(null);
+
             if (count == 0) {
                 var foodList = gameState.getGameObjects()
                         .stream().filter(item -> item.getGameObjectType() == ObjectTypes.FOOD)
                         .sorted(Comparator
                                 .comparing(item -> getDistanceBetween(bot, item)))
                         .collect(Collectors.toList());
-
-                playerAction.heading = getHeadingBetween(foodList.get(0));
-                playerAction.action = PlayerActions.FORWARD;
-                System.out.println("tick " + tick + ": food");
-                count = 1;
+                if (foodList != null && this.gameState.world.getCurrentTick() < 600) {
+                    playerAction.heading = getHeadingBetween(foodList.get(0));
+                    playerAction.action = PlayerActions.FORWARD;
+                    System.out.println("tick " + tick + ": food");
+                    count = 1;
+                }
+                else {
+                    playerAction.heading = getHeadingBetween(enemydefault);
+                    playerAction.action = PlayerActions.FIRETORPEDOES;
+                    System.out.println("tick " + tick + ": kamikaze");
+                    count = 1;
+                }
             }
 
             
