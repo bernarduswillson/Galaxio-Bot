@@ -22,6 +22,8 @@ public class BotService {
     static int activateshield = 0;
     static int firetele = 0;
     static int teleactivein = 0;
+    static int teleporter = 1;
+    static int count = 0;
     
     
 
@@ -50,11 +52,18 @@ public class BotService {
     public void computeNextPlayerAction(PlayerAction playerAction) {
         if (this.gameState.world.getCurrentTick() != null) {
             tick = this.gameState.world.getCurrentTick();
+            if (tick % 100 == 0 && tick != 0 && count == 0) {
+                teleporter++;
+                count++;
+            }
+            else if (tick % 100 != 0) {
+                count = 0;
+            }
+            System.out.println(teleporter);
             int count = 0;
             int botX = this.bot.position.x;
             int botY = this.bot.position.y;
-            double distanceFromWorldCenter = Math.sqrt(Math.pow((botX - 0), 2) + Math.pow((botY - 0), 2));
-            
+            double distanceFromWorldCenter = Math.sqrt(Math.pow((botX - 0), 2) + Math.pow((botY - 0), 2)); 
             System.out.println("tick size " + tick + ": " + this.bot.size);
 
             //avoid gas clouds
@@ -96,6 +105,7 @@ public class BotService {
                 firetele++;
                 if (firetele >= 3) {
                     firetele = 0;
+                    teleporter--;
                     System.out.println("tick " + tick + ": tembak tele reset");
                 }
             }
@@ -322,7 +332,7 @@ public class BotService {
                     .orElse(null);
             
             // attack nembak musuh
-                    if (enemytele != null && getDistanceBetween(enemytele, this.bot) >= 150 + this.bot.size + bot.size && getDistanceBetween(enemytele, this.bot) < 500 + this.bot.size + bot.size && this.bot.size > 100 && count == 0 && shoottele == 0) {
+                    if (enemytele != null && getDistanceBetween(enemytele, this.bot) >= 150 + this.bot.size + bot.size && getDistanceBetween(enemytele, this.bot) < 500 + this.bot.size + bot.size && this.bot.size > 100 && count == 0 && shoottele == 0 && teleporter > 0) {
                         System.out.println("tick distance " + tick + ": " + (getDistanceBetween(enemy, this.bot)-enemy.size-this.bot.size));
                         playerAction.heading = getHeadingBetween(enemytele);
                         playerAction.action = PlayerActions.FIRETELEPORT;
