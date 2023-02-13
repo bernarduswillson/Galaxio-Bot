@@ -35,8 +35,11 @@ public class BotService {
     static int runAway = 0;
     static int chase = 0;
     static int attack = 0;
+    static int squeezeL = 0;
+    static int squeezeR = 0;
     
     static int runAwayF = 0;
+    static int teleToCenter = 0;
     
     public BotService() {
         this.playerAction = new PlayerAction();
@@ -120,7 +123,7 @@ public class BotService {
             // is enemy bigger with margin, for defensive shooting
             var isEnemyBigger = gameState.getPlayerGameObjects().stream()
                     .filter(bot -> bot.id != this.bot.id)
-                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) + bot.size + this.bot.size))
+                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
                     .filter(bot -> bot.size > this.bot.size*0.9)
                     .orElse(null);
             
@@ -128,13 +131,13 @@ public class BotService {
             var isEnemyBigger2 = gameState.getPlayerGameObjects().stream()
             .filter(bot -> bot.id != this.bot.id)
             .filter(bot -> bot.size*1.1 > this.bot.size)
-                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) + bot.size + this.bot.size))
+                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
                     .orElse(null);
 
             // is enemy smaller with margin, and far, for teleporter
             var isEnemySmaller3 = gameState.getPlayerGameObjects().stream()
                     .filter(bot -> bot.id != this.bot.id)
-                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) + bot.size + this.bot.size))
+                    .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
                     .filter(bot -> bot.size*1.1 + 40 < this.bot.size)
                     .orElse(null);
                     
@@ -147,7 +150,7 @@ public class BotService {
 
             var scanFood = gameState.getGameObjects().stream()
                     .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.FOOD)
-                    .filter(gameObject -> (isInSight(headingPref, gameObject)))
+                    .filter(gameObject -> (isInSight(headingPref, gameObject, 30)))
                     .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, this.bot)))
                     .orElse(null);
 
@@ -160,7 +163,36 @@ public class BotService {
                             .comparing(gameObject -> getDistanceBetween(this.bot, gameObject)))
                     .collect(Collectors.toList());  
 
+            var isObjectInFrontO = gameState.getGameObjects().stream()
+                .filter(gameObject -> isEnemySmaller2 != null)
+                    .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.WORMHOLE || gameObject.gameObjectType == ObjectTypes.ASTEROIDFIELD || gameObject.gameObjectType == ObjectTypes.GASCLOUD)
+                    .filter(gameObject -> (isInSight(getHeadingBetween(isEnemySmaller2), gameObject, 8)))
+                    // .min(Comparator.comparing(gameObject -> (getDistanceBetween(gameObject, this.bot) - this.bot.size - gameObject.size < getDistanceBetween(isEnemySmaller2, this.bot) - this.bot.size - isEnemySmaller2.size)))
+                    .min(Comparator.comparing(gameObject -> (getDistanceBetween(gameObject, this.bot))))
+                    // .filter(gameObject -> getDistanceBetween(gameObject, this.bot) - this.bot.size - gameObject.size < getDistanceBetween(isEnemySmaller2, this.bot) - this.bot.size - isEnemySmaller2.size)
+                    .orElse(null);
+
+            var isObjectInFrontD = gameState.getGameObjects().stream()
+                    .filter(gameObject -> isEnemyBigger != null)
+                    .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.WORMHOLE || gameObject.gameObjectType == ObjectTypes.ASTEROIDFIELD || gameObject.gameObjectType == ObjectTypes.GASCLOUD)
+                    .filter(gameObject -> (isInSight(getHeadingBetween(gameObject), gameObject, 8)))
+                    // .min(Comparator.comparing(gameObject -> (getDistanceBetween(gameObject, this.bot) - this.bot.size - gameObject.size < getDistanceBetween(isEnemyBigger, this.bot) - this.bot.size - isEnemyBigger.size)))
+                    .min(Comparator.comparing(gameObject -> (getDistanceBetween(gameObject, this.bot))))
+                    // .filter(gameObject -> getDistanceBetween(gameObject, this.bot) - this.bot.size - gameObject.size < getDistanceBetween(isEnemyBigger, this.bot) - this.bot.size - isEnemyBigger.size)
+                    .orElse(null);
+
             if (currentTick % 10 != 0 || teleWasShot >= 1) {
+
+                if (teleToCenter >= 1) {
+                    teleToCenter++;
+                    if (teleToCenter > 25) {
+                        playerAction.action = PlayerActions.TELEPORT;
+                        System.out.println("DETONATE TELEPORTER");
+                        teleToCenter = 0;
+                        teleWasShot = 0;
+                        isAction = 1;
+                    }
+                }
 
                 if (shieldOn >= 1) {
                     shieldOn++;
@@ -176,7 +208,7 @@ public class BotService {
                 isAction == 0
                 ) {
                     playerAction.action = PlayerActions.ACTIVATESHIELD;
-                    System.out.println("ACTIVATE SHIELD");
+                    System.out.println("OFFENSIVE SHIELD");
                     activateShield = 0;
                     shieldOn = 1;
                     isAction = 1;
@@ -215,7 +247,7 @@ public class BotService {
                 isAction == 0
                 ) {
                     playerAction.action = PlayerActions.ACTIVATESHIELD;
-                    System.out.println("SHIELD TOLOL");
+                    System.out.println("DEFENSIVE SHIELD");
                     isAction = 1;
                     shieldOn = 1;
                 }
@@ -229,7 +261,13 @@ public class BotService {
                 teleWasShot == 0 && 
                 isAction == 0
                 ) {
-                    //high fire rate when enemy is close
+                    // if (
+                    // isObjectInFrontD != null &&
+                    // getDistanceBetween(isObjectInFrontD, this.bot) - this.bot.size - isObjectInFrontD.size < getDistanceBetween(isObjectInFrontD, this.bot) - this.bot.size - isEnemyBigger.size
+                    // ) {
+                    //     System.out.println("OBJECT IN FRONT, ABORT SHOOTING");
+                    // }
+                    // //high fire rate when enemy is close
                     if (
                     getDistanceBetween(isEnemyBigger, this.bot) < 200 + this.bot.size + isEnemyBigger.size
                     ) {
@@ -274,12 +312,63 @@ public class BotService {
                 ) {
                     if (
                     isEnemyBigger2 != null && 
-                    getDistanceBetween(isEnemyBigger2, this.bot) < 200 + this.bot.size + isEnemyBigger2.size
+                    getDistanceBetween(isEnemyBigger2, this.bot) < 100 + this.bot.size + isEnemyBigger2.size &&
+                    teleWasShot == 0 &&
+                    this.bot.teleporterCount > 0 &&
+                    this.bot.size > 30
                     ) {
-                        playerAction.heading = getHeadingBetween(isEnemyBigger2)+90;
-                        playerAction.action = PlayerActions.FORWARD;
-                        System.out.println("SQUEEZED");
+                        playerAction.heading = getHeadingToCenter();
+                        playerAction.action = PlayerActions.FIRETELEPORT;
+                        System.out.println("TELEPORT TO CENTER");
+                        teleToCenter++;
+                        teleWasShot = 1;
                         isAction = 1;
+                        // playerAction.heading = getHeadingBetween(isEnemyBigger2)+90;
+                        // playerAction.action = PlayerActions.FORWARD;
+                        // System.out.println("SQUEEZED");
+                        // isAction = 1;
+                        // if (
+                        // (this.bot.currentHeading >= 0 && 
+                        // this.bot.currentHeading <= 90) || 
+                        // (this.bot.currentHeading >= 180 && 
+                        // this.bot.currentHeading <= 270)
+                        // ) {
+                        //     if (
+                        //     squeezeL == 0
+                        //     ) {
+                        //         playerAction.heading = this.bot.currentHeading + 90;
+                        //         playerAction.action = PlayerActions.FORWARD;
+                        //         System.out.println("LEFT SQUEEZED");
+                        //         squeezeL++;
+                        //         isAction = 1;
+                        //     }
+                        //     else if (
+                        //     squeezeL == 1
+                        //     ) {
+                        //         squeezeL = 0;
+                        //     }
+                        // }
+                        // else if (
+                        //     (this.bot.currentHeading >= 90 && 
+                        //     this.bot.currentHeading <= 180) || 
+                        //     (this.bot.currentHeading >= 270 && 
+                        //     this.bot.currentHeading <= 360)
+                        // ) {
+                        //     if (
+                        //     squeezeR == 0
+                        //     ) {
+                        //         playerAction.heading = this.bot.currentHeading - 90;
+                        //         playerAction.action = PlayerActions.FORWARD;
+                        //         System.out.println("RIGHT SQUEEZED");
+                        //         squeezeR++;
+                        //         isAction = 1;
+                        //     }
+                        //     else if (
+                        //     squeezeR == 1
+                        //     ) {
+                        //         squeezeR = 0;
+                        //     }
+                        // }
                     }
                     else {
                         if (
@@ -380,10 +469,18 @@ public class BotService {
                 teleWasShot == 0 && 
                 isAction == 0
                 ) {
+                    // if (
+                    // isObjectInFrontO != null &&
+                    // getDistanceBetween(isObjectInFrontO, this.bot) - this.bot.size - isObjectInFrontO.size < getDistanceBetween(isEnemySmaller2, this.bot) - this.bot.size - isEnemySmaller2.size
+                    // ) {
+                    //     System.out.println("OBJECT IN FRONT, ABORT SHOOTING");
+                    // }
+                    // else {
                     playerAction.heading = getHeadingBetween(isEnemySmaller2);
                     playerAction.action = PlayerActions.FIRETORPEDOES;
                     System.out.println("OFFENSIVE FIRE");
                     isAction = 1;
+                    // }
                 }
 
 
@@ -457,8 +554,8 @@ public class BotService {
     }
 
 
-    public boolean isInSight(int heading, GameObject gameObject) {
-        int vision = 15; 
+    public boolean isInSight(int heading, GameObject gameObject, int vision) { 
+        vision /= 2;
         if (heading >= vision && heading <= 360 - vision) {
             if (getHeadingBetween(gameObject) >= (heading - vision)%360 && getHeadingBetween(gameObject) <= (heading + vision)%360) {
                 return true;
@@ -467,13 +564,11 @@ public class BotService {
         else if (heading < vision) {
             if ((getHeadingBetween(gameObject) <= (heading + vision) && getHeadingBetween(gameObject) >= 0) || (360 - vision + heading <= getHeadingBetween(gameObject) && getHeadingBetween(gameObject) <= 360)) {
                 return true;
-                
             }
         }
         else if (heading > 360 - vision) {
             if ((getHeadingBetween(gameObject) >= (heading - vision) && getHeadingBetween(gameObject) <= 360) || (360 - vision + heading <= getHeadingBetween(gameObject) && getHeadingBetween(gameObject) <= 360)) {
                 return true;
-  
             }
         }
         return false;
@@ -605,22 +700,22 @@ public class BotService {
                     .sorted(Comparator
                             .comparing(item -> getDistanceBetween(this.bot, item)))
                     .collect(Collectors.toList());
-            scoreSum += foodList.size() * 1;
+            scoreSum += foodList.size() * 10;
 
             //collect superfood list
             List<GameObject> superfoodList = gameState.getGameObjects()
                     .stream().filter(item -> item.getGameObjectType() == ObjectTypes.SUPERFOOD)
-                    .filter(item -> getDistanceBetween(this.bot, item) < this.gameState.world.radius + this.bot.size + item.size)
+                    .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
                     .sorted(Comparator
                             .comparing(item -> getDistanceBetween(this.bot, item)))
                     .collect(Collectors.toList());
-            scoreSum += superfoodList.size() * 2;
+            scoreSum += superfoodList.size() * 15;
 
             //collect obstacles list
             List<GameObject> obstacleList = gameState.getGameObjects()
                     .stream().filter(item -> item.getGameObjectType() == ObjectTypes.GASCLOUD)
-                    .filter(item -> getDistanceBetween(this.bot, item) < this.gameState.world.radius + this.bot.size + item.size)
+                    .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
                     .sorted(Comparator
                             .comparing(item -> getDistanceBetween(this.bot, item)))
@@ -630,7 +725,7 @@ public class BotService {
             //collect asteroid list
             List<GameObject> asteroidList = gameState.getGameObjects()
                     .stream().filter(item -> item.getGameObjectType() == ObjectTypes.ASTEROIDFIELD)
-                    .filter(item -> getDistanceBetween(this.bot, item) < this.gameState.world.radius + this.bot.size + item.size)
+                    .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
                     .sorted(Comparator
                             .comparing(item -> getDistanceBetween(this.bot, item)))
@@ -640,17 +735,17 @@ public class BotService {
             //collect wormhole list
             List<GameObject> wormholeList = gameState.getGameObjects()
                     .stream().filter(item -> item.getGameObjectType() == ObjectTypes.WORMHOLE)
-                    .filter(item -> getDistanceBetween(this.bot, item) < this.gameState.world.radius + this.bot.size + item.size)
+                    .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
                     .sorted(Comparator
                             .comparing(item -> getDistanceBetween(this.bot, item)))
                     .collect(Collectors.toList());
-            scoreSum += wormholeList.size() * -10;
+            scoreSum += wormholeList.size() * -20;
 
             // collect bigger enemy list
             List<GameObject> enemyBiggerList = gameState.getGameObjects()
                     .stream().filter(item -> item.getGameObjectType() == ObjectTypes.PLAYER)
-                    .filter(item -> getDistanceBetween(this.bot, item) < this.gameState.world.radius + this.bot.size + item.size)
+                    .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
                     // .filter(item -> item.size > this.bot.size)
                     .sorted(Comparator
@@ -686,3 +781,16 @@ public class BotService {
         return (maxScoreIndex+1) * vision - (vision/2);
     }
 }
+
+// if ((this.bot.currentHeading >= 0 && this.bot.currentHeading <= 90) || (this.bot.currentHeading >= 180 && this.bot.currentHeading <= 270)) {
+                                //     playerAction.heading = this.bot.currentHeading + 90;
+                                //     playerAction.action = PlayerActions.FORWARD;
+                                //     System.out.println("tick " + tick + ": kejepit kiri");
+                                //     count = 1;
+                                // }
+                                // else {
+                                //     playerAction.heading = this.bot.currentHeading - 90;
+                                //     playerAction.action = PlayerActions.FORWARD;
+                                //     System.out.println("tick " + tick + ": kejepit kanan");
+                                //     count = 1;
+                                // }
