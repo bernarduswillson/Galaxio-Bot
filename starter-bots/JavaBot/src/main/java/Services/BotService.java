@@ -46,6 +46,11 @@ public class BotService {
     static int supernovaTick = 0;
     static int supernovaActiveIn = 0;
     static int supernovaWasShot = 0;
+
+    static int isAbortD = 0;
+    static int isAbortO = 0;
+
+    // static double minDistance = 1000;
     
     public BotService() {
         this.playerAction = new PlayerAction();
@@ -157,8 +162,9 @@ public class BotService {
             var scanFood = gameState.getGameObjects().stream()
                     .filter(gameObject -> gameObject.gameObjectType == ObjectTypes.FOOD)
                     .filter(gameObject -> (isInSight(headingPref, gameObject, 30)))
-                    .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, this.bot)))
-                    .orElse(null);
+                    .collect(Collectors.toList());
+                    // .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, this.bot)))
+                    // .orElse(null);
 
             //get torpedoes heading to this bot
             var enemyTorpedoes = gameState.getGameObjects().stream()
@@ -196,7 +202,10 @@ public class BotService {
                     .orElse(null);
 
                     
-            if (currentTick % 10 != 0 || teleWasShot >= 1) {
+            // if (
+            // prevsize == this.bot.size || 
+            // teleWasShot >= 1
+            // ) {
 
                 // detonate supernova
                 if (
@@ -308,7 +317,7 @@ public class BotService {
                 //1. Shoot enemy when enemy is bigger, defensive shooting
                 if (
                 isEnemyBigger != null && 
-                getDistanceBetween(isEnemyBigger, this.bot) < 500 + this.bot.size + isEnemyBigger.size && 
+                getDistanceBetween(isEnemyBigger, this.bot) < 350 + this.bot.size + isEnemyBigger.size && 
                 this.bot.size > 30 && 
                 this.bot.torpedoSalvoCount > 0 &&
                 teleWasShot == 0 && 
@@ -316,28 +325,38 @@ public class BotService {
                 ) {
                     // sort isobjectinfront by distance
                     double minDistance = 1000;
-                    if (isObjectInFrontD.size() > 0) {
+                    if (isObjectInFrontO.size() > 0) {
                         for (int i = 0; i < isObjectInFrontD.size(); i++) {
                             if (getDistanceBetween(isObjectInFrontD.get(i), this.bot) < minDistance) {
                                 minDistance = getDistanceBetween(isObjectInFrontD.get(i), this.bot);
                             }
                         }
-                        if (minDistance - this.bot.size < getDistanceBetween(isEnemyBigger, this.bot) - this.bot.size - isEnemyBigger.size) {
-                            System.out.println("OBJECT IN FRONT, ABORT SHOOTING");
-                        }
+                        System.out.println("MIN DISTANCE: " + minDistance);
+                    }
+                    System.out.println("MIN DISTANCE: " + minDistance);
+                    if (minDistance - this.bot.size < getDistanceBetween(isEnemyBigger, this.bot) - this.bot.size - isEnemyBigger.size) {
+                        System.out.println("OBJECT IN FRONT, ABORT SHOOTING");
                     }
                     // //high fire rate when enemy is close
                     else if (
-                    getDistanceBetween(isEnemyBigger, this.bot) < 200 + this.bot.size + isEnemyBigger.size
+                    getDistanceBetween(isEnemyBigger, this.bot) < 150 + this.bot.size + isEnemyBigger.size
                     ) {
+                        if (
+                        closeFire == 0
+                        ) {
                         playerAction.heading = getHeadingBetween(isEnemyBigger);
                         playerAction.action = PlayerActions.FIRETORPEDOES;
                         System.out.println("CLOSE RANGE FIRE");
+                        closeFire++;
                         isAction = 1;
+                        }
+                        else if (closeFire == 1) {
+                            closeFire = 0;
+                        }
                     }
                     //low fire rate when enemy is far
                     else if (
-                    getDistanceBetween(isEnemyBigger, this.bot) >= 200 + this.bot.size + isEnemyBigger.size
+                    getDistanceBetween(isEnemyBigger, this.bot) <= 350 + this.bot.size + isEnemyBigger.size
                     ) {
                         //low fire rate
                         if (
@@ -370,18 +389,35 @@ public class BotService {
                 isAction == 0
                 ) {
                     if (
-                    center == 0
+                    isEnemyBigger2 != null && 
+                    getDistanceBetween(isEnemyBigger2, this.bot) < 200 + this.bot.size + isEnemyBigger2.size
                     ) {
-                        playerAction.heading = getHeadingToCenter();
-                        playerAction.action = PlayerActions.FORWARD;
-                        System.out.println("GO TO CENTER");
-                        center++;
-                        isAction = 1;
+                        if (squeezeL == 0) {
+                            playerAction.heading = getHeadingBetween(isEnemyBigger2)+90;
+                            playerAction.action = PlayerActions.FORWARD;
+                            System.out.println("SQUEEZED");
+                            squeezeL++;
+                            isAction = 1;
+                        }
+                        else if (squeezeL == 1) {
+                            squeezeL = 0;
+                        }
                     }
-                    else if (
-                    center == 1
-                    ) {
-                        center = 0;
+                    else {
+                        if (
+                        center == 0
+                        ) {
+                            playerAction.heading = getHeadingToCenter();
+                            playerAction.action = PlayerActions.FORWARD;
+                            System.out.println("GO TO CENTER");
+                            center++;
+                            isAction = 1;
+                        }
+                        else if (
+                        center == 1
+                        ) {
+                            center = 0;
+                        }
                     }
                 }
                         
@@ -462,6 +498,7 @@ public class BotService {
                 isEnemySmaller2 != null && 
                 getDistanceBetween(isEnemySmaller2, this.bot) < 150 + this.bot.size + bot.size && 
                 this.bot.torpedoSalvoCount > 0 &&
+                this.bot.size > 50 &&
                 teleWasShot == 0 && 
                 isAction == 0
                 ) {
@@ -472,15 +509,23 @@ public class BotService {
                                 minDistance = getDistanceBetween(isObjectInFrontO.get(i), this.bot);
                             }
                         }
-                        if (minDistance - this.bot.size < getDistanceBetween(isEnemySmaller2, this.bot) - this.bot.size - isEnemySmaller2.size) {
-                            System.out.println("OBJECT IN FRONT, ABORT SHOOTING");
-                        }
+                        System.out.println("minDistance: " + minDistance);
+                    }
+                    System.out.println("minDistance: " + minDistance);
+                    if (minDistance - this.bot.size < getDistanceBetween(isEnemySmaller2, this.bot) - this.bot.size - isEnemySmaller2.size) {
+                        System.out.println("OBJECT IN FRONT, ABORT SHOOTING");
                     }
                     else {
+                        if (attack == 0) {
                         playerAction.heading = getHeadingBetween(isEnemySmaller2);
                         playerAction.action = PlayerActions.FIRETORPEDOES;
                         System.out.println("OFFENSIVE FIRE");
+                        attack++;
                         isAction = 1;
+                        }
+                        else if (attack == 1) {
+                            attack = 0;
+                        }
                     }
                 }
 
@@ -496,25 +541,37 @@ public class BotService {
                     runAwayF = 0;
                     isAction = 1;
                 }
-            }
+            // }
         
             //7. Finding best area to move to
             if (
             (scanFood != null && 
             this.gameState.world.getCurrentTick() < 700 &&
-            currentTick % 10 == 0 &&
+            // currentTick % 10 == 0 &&
+            prevsize != this.bot.size &&
             runAwayF == 0 &&
             // this.bot.size != prevsize &&
             isAction == 0)
             ) {
-                playerAction.heading = getHeadingBetween(scanFood);
-                System.out.println("Heading pref: " + headingPref);
-                playerAction.action = PlayerActions.FORWARD;
-                System.out.println("FOOD");
-                isAction = 1;
+                double minDistanceF = 10000;
+                int index = 0;
+                if (scanFood.size() > 0) {
+                    for (int i = 0; i < scanFood.size(); i++) {
+                        if (getDistanceBetween(scanFood.get(i), this.bot) < minDistanceF) {
+                            minDistanceF = getDistanceBetween(scanFood.get(i), this.bot);
+                            index = i;
+                        }
+                    }
+                    var closestScanFood = scanFood.get(index);
+                    playerAction.heading = getHeadingBetween(closestScanFood);
+                    System.out.println("Heading pref: " + headingPref);
+                    playerAction.action = PlayerActions.FORWARD;
+                    System.out.println("FOOD");
+                    isAction = 1;
+                }
             }
 
-            if (currentTick % 10 != 0) {
+            // if (currentTick % 10 != 0) {
                 //8. Kamikaze when there is no more food
                 if (
                 closestFood == null && 
@@ -547,7 +604,7 @@ public class BotService {
                     System.out.println("DEFAULT");
                     isAction = 1;
                 }
-            }
+            // }
             prevsize = this.bot.size;
             this.playerAction = playerAction;
             System.out.println("Bot Heading: " + this.playerAction.getHeading());
