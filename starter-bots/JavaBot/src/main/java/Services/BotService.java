@@ -89,7 +89,6 @@ public class BotService {
             System.out.println("");
             System.out.println("Closest Enemy Distance: " + getDistanceBetween(closestEnemy, this.bot));
             System.out.println("Closest Enemy Size: " + closestEnemy.size);
-            System.out.println("Enemy Bullet: " + closestEnemy.torpedoSalvoCount);
             System.out.println("");
             System.out.println("Action: ");
 
@@ -598,60 +597,47 @@ public class BotService {
         int y2 = gameObject.getPosition().y;
         //get torpedo heading
         int heading = gameObject.currentHeading;
-
-        System.out.println("Torpedo heading: " + heading);
-        System.out.println("Torpedo position: " + x2 + " " + y2);
-        System.out.println("Bot position: " + x + " " + y);
         
         if (x2 > x && y2 > y) {
             if (heading  >= 180 && heading <= 270) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 < x && y2 > y) {
             if (heading >= 270 && heading <= 360) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 < x && y2 < y) {
             if (heading >= 0 && heading <= 90) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 > x && y2 < y) {
             if (heading >= 90 && heading <= 180) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 > x && y2 == y) {
             if (heading == 180) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 < x && y2 == y) {
             if (heading == 0) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 == x && y2 > y) {
             if (heading == 270) {
-                System.out.println("true");
                 return true;
             }
         }
         else if (x2 == x && y2 < y) {
             if (heading == 90) {
-                System.out.println("true");
                 return true;
             }
         }
-        System.out.println("false");
         return false;
     }
 
@@ -765,7 +751,6 @@ public class BotService {
                     .stream().filter(item -> item.getGameObjectType() == ObjectTypes.PLAYER)
                     .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
-                    // .filter(item -> item.size > this.bot.size)
                     .sorted(Comparator
                             .comparing(item -> getDistanceBetween(this.bot, item)))
                     .collect(Collectors.toList());
@@ -797,9 +782,6 @@ public class BotService {
                 maxScoreIndex = i;
             }
         }
-        System.out.println(scoringList);
-        System.out.print("Final Heading: ");
-        System.out.println((maxScoreIndex+1) * vision - (vision/2));
         return (maxScoreIndex+1) * vision - (vision/2);
     }
 }
