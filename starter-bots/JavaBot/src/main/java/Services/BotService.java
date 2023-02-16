@@ -695,7 +695,7 @@ public class BotService {
                             .comparing(item -> getDistanceBetween(this.bot, item)))
                     .collect(Collectors.toList());
             for (int j = 0; j < foodList.size(); j++) {
-                scoreSum += 10 / getDistanceBetween(this.bot, foodList.get(j));
+                scoreSum += 20 / getDistanceBetween(this.bot, foodList.get(j));
             }
 
             //collect superfood list
@@ -707,12 +707,12 @@ public class BotService {
                             .comparing(item -> getDistanceBetween(this.bot, item)))
                     .collect(Collectors.toList());
             for (int j = 0; j < superfoodList.size(); j++) {
-                scoreSum += 15 / getDistanceBetween(this.bot, superfoodList.get(j));
+                scoreSum += 21 / getDistanceBetween(this.bot, superfoodList.get(j));
             }
 
             //collect obstacles list
             List<GameObject> gasCloudList = gameState.getGameObjects()
-                    .stream().filter(item -> item.getGameObjectType() == ObjectTypes.GASCLOUD)
+                    .stream().filter(item -> item.getGameObjectType() == ObjectTypes.GASCLOUD || item.getGameObjectType() == ObjectTypes.SUPERNOVABOMB)
                     .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
                     .filter(item -> getHeadingBetween(item) >= headingStart && getHeadingBetween(item) <= headingEnd)
                     .sorted(Comparator
