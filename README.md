@@ -1,4 +1,4 @@
-# Tubes1_STIMA
+# Tubes1_paSTI MAh rank 1
 
 ## Daftar Isi
 * [Deskripsi Singkat Program](#deskripsi-singkat-program)
