@@ -47,6 +47,12 @@ Java versi 11 atau lebih baru
 * NIM: 13521021
 * Prodi/Jurusan: STEI/Teknik Informatika
 * Profile Github: bernarduswillson
+
+* Nama: Raynard Tanadi
+* NIM: 13521143
+* Prodi/Jurusan: STEI/ Teknik Informatika
+* Profile Github: Raylouiss
+
 * Nama: Kenneth Dave Bahana
 * NIM: 13521145
 * Prodi/Jurusan: STEI/Teknik Informatika
