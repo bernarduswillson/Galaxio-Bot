@@ -1,0 +1,652 @@
+PROCEDURE computeNextPlayerAction(playerAction : PlayerAction)
+
+ALGORITMA
+{Shoot supernova when enemy is the biggest and far away}
+
+    // get biggest enemy size
+    LET isEnemyBiggest ←    gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .filter(bot -> bot.size*1.1 > this.bot.size)
+                            .max(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .orELSE(NULL)
+                        
+    IF (
+    isEnemyBiggest NOT NULL AND 
+    getDistanceBetween(isEnemyBiggest, this.bot) > (0.5*this.gameState.world.radius) + this.bot.size + bot.size AND 
+    this.bot.supernovaAvailable = 1 AND 
+    isAction = 0
+    ) THEN
+        playerAction.heading ← getHeadingBetween(isEnemyBiggest)
+        playerAction.action ← PlayerActions.FIRESUPERNOVA
+        supernovaTick ← this.gameState.world.getCurrentTick()
+        supernovaActiveIn ← (getDistanceBetween(isEnemyBiggest, this.bot) - (isEnemyBiggest.size * 0.5) - this.bot.size) / 20
+        supernovaWasShot ← supernovaWasShot + 1
+        isAction = 1
+    END IF
+
+    // detonate supernova
+    IF (
+    supernovaTick + supernovaActiveIn = currentTick AND
+    supernovaWasShot >= 1 AND
+    isAction = 0
+    ) {
+        playerAction.action ← PlayerActions.DETONATESUPERNOVA
+        isAction ← 1
+        supernovaWasShot ← 0
+    }
+
+
+{Shield when enemytorpedo is close}
+
+    // get torpedoes heading to this bot
+    LET enemyTorpedoes ←    gameState.getGameObjects().stream()
+                            .filter(gameObject -> gameObject.gameObjectType = ObjectTypes.TORPEDOSALVO)
+                            .filter(gameObject -> isEnemyTorpedo(gameObject) = TRUE)
+                            .filter(gameObject -> getDistanceBetween(gameObject, this.bot) < 100 + this.bot.size)
+                            .sorted(Comparator
+                                    .comparing(gameObject -> getDistanceBetween(this.bot, gameObject)))
+                            .collect(Collectors.toList())
+
+    IF (
+    this.bot.size > 50 AND
+    enemyTorpedoes.size() > 1 AND
+    shieldOn = 0 AND
+    isAction = 0
+    ) THEN
+        playerAction.action ← PlayerActions.ACTIVATESHIELD
+        isAction ← isAction + 1
+        shieldOn ← shieldOn + 1
+    END IF
+
+
+{Shoot enemy when enemy is bigger, defensive shooting}
+
+    // is enemy bigger with margin, for defensive shooting
+    LET isEnemyBigger ←     gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .filter(bot -> bot.size > this.bot.size*0.9)
+                            .orELSE(NULL)
+
+    // check IF there is an object that can block shooting (defensive)
+    LET isObjectInFrontD ←  gameState.getGameObjects().stream()
+                            .filter(gameObject -> isEnemyBigger NOT NULL)
+                            .filter(gameObject -> gameObject.gameObjectType = ObjectTypes.WORMHOLE OR gameObject.gameObjectType = ObjectTypes.ASTEROIDFIELD OR gameObject.gameObjectType = ObjectTypes.GASCLOUD)
+                            .filter(gameObject -> (isInSight(getHeadingBetween(isEnemyBigger), gameObject, 30)))
+                            .collect(Collectors.toList())
+
+    IF (
+    isEnemyBigger NOT NULL AND
+    getDistanceBetween(isEnemyBigger, this.bot) < 350 + this.bot.size + isEnemyBigger.size AND 
+    this.bot.size > 30 AND 
+    this.bot.torpedoSalvoCount > 0 AND
+    teleWasShot = 0 AND 
+    isAction = 0
+    ) THEN
+        minDistance ← 1000
+        IF (isObjectInFrontD.size() > 0) THEN
+            FOR (i ← 0 : i < isObjectInFrontD.size()) DO
+                IF (getDistanceBetween(isObjectInFrontD.get(i), this.bot) < minDistance) THEN
+                    minDistance ← getDistanceBetween(isObjectInFrontD.get(i), this.bot)
+                END IF
+                i ← i + 1
+            END FOR
+        END IF
+        // check IF there is an object that can block shooting
+        IF (minDistance - this.bot.size < getDistanceBetween(isEnemyBigger, this.bot) - this.bot.size - isEnemyBigger.size) THEN
+            minDistance ← 1000
+        END IF
+        // high fire rate when enemy is close
+        ELSE IF (getDistanceBetween(isEnemyBigger, this.bot) < 150 + this.bot.size + isEnemyBigger.size) THEN
+            IF (closeFire = 0) THEN
+                playerAction.heading ← getHeadingBetween(isEnemyBigger)
+                playerAction.action ← PlayerActions.FIRETORPEDOES
+                closeFire ← closeFire + 1
+                isAction ← 1
+            END IF
+            ELSE IF (closeFire = 1) THEN
+                closeFire ← 0
+            END IF
+        END IF
+        // low fire rate when enemy is far
+        ELSE IF (getDistanceBetween(isEnemyBigger, this.bot) <= 350 + this.bot.size + isEnemyBigger.size) THEN
+            IF (longFire = 0) THEN
+                playerAction.heading ← getHeadingBetween(isEnemyBigger)
+                playerAction.action ← PlayerActions.FIRETORPEDOES
+                longFire ← longFire + 1
+                isAction ← 1
+            END IF
+            ELSE IF (
+            longFire = 1 OR 
+            longFire = 2 OR 
+            longFire = 3
+            ) THEN
+                longFire ← longFire + 1
+            END IF
+            ELSE IF (longFire >= 4) THEN
+                longFire ← 0
+            END IF
+        END IF
+    END IF
+
+
+{Go to center when edge is near}
+
+    // is enemy bigger with margin, for running away
+    LET isEnemyBigger2 ←    gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .filter(bot -> bot.size*1.1 > this.bot.size)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .orElse(NULL)
+
+    IF (
+    distanceFromWorldCenter*1.2 + (1.7*this.bot.size) > worldRadius AND
+    isAction = 0
+    ) THEN
+        // if chased by enemy in the edge, escape
+        IF (
+        isEnemyBigger2 NOT NULL AND 
+        getDistanceBetween(isEnemyBigger2, this.bot) < 200 + this.bot.size + isEnemyBigger2.size
+        ) THEN
+            IF (squeezeL = 0) THEN
+                playerAction.heading ← getHeadingBetween(isEnemyBigger2) + 90
+                playerAction.action ← PlayerActions.FORWARD
+                squeezeL ← squeezeL + 1
+                isAction ← 1
+            END IF
+            ELSE IF (squeezeL = 1) THEN
+                squeezeL ← 0
+            END IF
+        END IF
+        // IF not chased, go to center
+        ELSE 
+            IF (center = 0) THEN
+                playerAction.heading ← getHeadingToCenter()
+                playerAction.action ← PlayerActions.FORWARD
+                center ← center + 1
+                isAction ← 1
+            END IF
+            ELSE IF (center = 1) THEN
+                center ← 0
+            END IF
+    END IF
+
+
+{Escape if enemy is bigger and close}
+
+    // is enemy bigger with margin, for running away
+    LET isEnemyBigger2 ←    gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .filter(bot -> bot.size*1.1 > this.bot.size)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .orElse(NULL)
+
+    IF (
+    isEnemyBigger2 NOT NULL AND 
+    getDistanceBetween(isEnemyBigger2, this.bot) < 200 + this.bot.size + bot.size AND
+    isAction = 0
+    ) THEN
+        IF (runAway = 0) THEN
+            playerAction.heading ← getHeadingBetween(isEnemyBigger2) + 180
+            playerAction.action ← PlayerActions.FORWARD
+            runAwayF ← runAwayF + 1
+            runAway ← runAway + 1
+            isAction ← 1
+        END IF
+        ELSE IF (runAway = 1) THEN
+            runAwayF ← runAwayF + 1
+            runAway ← 0
+        END IF
+    END IF
+
+
+{Chase when enemy is smaller and close}
+
+    // is enemy smaller with margin, for chasing and offensive shooting
+    LET isEnemySmaller2 ←   gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .filter(bot -> bot.size*1.2 < this.bot.size)
+                            .orElse(NULL)
+    
+    IF (
+    isEnemySmaller2 NOT NULL AND
+    getDistanceBetween(isEnemySmaller2, this.bot) < 100 + this.bot.size + bot.size AND
+    teleWasShot = 0 AND
+    isAction = 0
+    ) THEN
+        IF (chase = 0) THEN
+            playerAction.heading ← getHeadingBetween(isEnemySmaller2)
+            playerAction.action ← PlayerActions.FORWARD
+            chase ← chase + 1
+            runAwayF ← runAwayF + 1
+            isAction ← 1
+        END IF
+        ELSE IF (chase = 1) THEN
+            runAwayF ← runAwayF + 1
+            chase ← 0
+        END IF
+    END IF
+
+
+{Shoot teleport when enemy is smaller and in range}
+
+    // is enemy smaller with margin, and far, for teleporter
+    LET isEnemySmaller3 ←   gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .filter(bot -> bot.size*1.1 + 40 < this.bot.size)
+                            .orElse(NULL)
+
+    IF (
+    isEnemySmaller3 NOT NULL AND 
+    getDistanceBetween(isEnemySmaller3, this.bot) >= 150 + this.bot.size + bot.size AND 
+    getDistanceBetween(isEnemySmaller3, this.bot) < 500 + this.bot.size + bot.size AND 
+    this.bot.size > 100 AND 
+    this.bot.teleporterCount > 0 AND 
+    this.bot.shieldCount > 0 AND
+    shieldOn = 0 AND
+    teleWasShot = 0 AND 
+    isAction = 0
+    ) THEN
+        playerAction.heading ← getHeadingBetween(isEnemySmaller3)
+        playerAction.action ← PlayerActions.FIRETELEPORT
+        teleTick ← this.gameState.world.getCurrentTick()
+        teleActiveIn ← (getDistanceBetween(isEnemySmaller3, this.bot)-(isEnemySmaller3.size*0.5)-this.bot.size)/20
+        teleWasShot ← teleWasShot + 1
+        activateShield ← 1
+        isAction ← 1
+    END IF
+    
+    // activate shield after shooting teleporter
+    IF (
+        activateShield >= 1 AND
+        isAction = 0
+    ) THEN
+    playerAction.action ← PlayerActions.ACTIVATESHIELD
+    activateShield ← 0
+    shieldOn ← 1
+    isAction ← 1
+    END IF
+
+    // is enemy smaller with no margin, for detonate
+    LET isEnemySmaller ←    gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .filter(bot -> bot.size < this.bot.size)
+                            .orElse(NULL)
+
+    // detonate teleporter when the enemy is smaller
+    IF (
+    teleTick + teleActiveIn = currentTick AND 
+    isEnemySmaller NOT NULL AND
+    teleWasShot >= 1 AND
+    isAction = 0
+    ) THEN
+        playerAction.action ← PlayerActions.TELEPORT
+        isAction ← 1
+        teleWasShot ← 0
+    END IF
+    ELSE IF (
+    teleTick + teleActiveIn = currentTick AND 
+    isEnemySmaller = NULL AND
+    teleWasShot >= 1  AND 
+    isAction = 0
+    ) THEN
+        teleWasShot ← 0
+    END IF
+
+
+{Shoot torpedo when enemy is smaller and close, offensive shooting}
+
+    // is enemy smaller with margin, for chasing and offensive shooting
+    LET isEnemySmaller2 ←   gameState.getPlayerGameObjects().stream()
+                            .filter(bot -> bot.id NOT this.bot.id)
+                            .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                            .filter(bot -> bot.size*1.2 < this.bot.size)
+                            .orElse(NULL)
+
+    // check if there is an object that can block shooting (offensive)
+    LET isObjectInFrontO ←  gameState.getGameObjects().stream()
+                            .filter(gameObject -> isEnemySmaller2 NOT NULL)
+                            .filter(gameObject -> gameObject.gameObjectType = ObjectTypes.WORMHOLE OR gameObject.gameObjectType = ObjectTypes.ASTEROIDFIELD OR gameObject.gameObjectType = ObjectTypes.GASCLOUD)
+                            .filter(gameObject -> (isInSight(getHeadingBetween(isEnemySmaller2), gameObject, 30)))
+                            .collect(Collectors.toList());  
+
+    IF (
+    isEnemySmaller2 NOT NULL AND
+    getDistanceBetween(isEnemySmaller2, this.bot) < 150 + this.bot.size + bot.size AND
+    this.bot.torpedoSalvoCount > 0 AND
+    this.bot.size > 50 AND
+    teleWasShot = 0 AND 
+    isAction = 0
+    ) THEN
+        double minDistance ← 1000
+        IF (isObjectInFrontO.size() > 0) THEN
+            FOR (i ← 0 : i < isObjectInFrontO.size()) DO
+                IF (getDistanceBetween(isObjectInFrontO.get(i), this.bot) < minDistance) THEN
+                    minDistance ← getDistanceBetween(isObjectInFrontO.get(i), this.bot);
+                END IF
+                i ← i + 1
+            END FOR
+        END IF
+        // check if there is an object that can block shooting
+        IF (minDistance - this.bot.size < getDistanceBetween(isEnemySmaller2, this.bot) - this.bot.size - isEnemySmaller2.size) THEN
+            minDistance ← 1000
+        END IF
+        ELSE
+            IF (attack = 0) THEN
+            playerAction.heading ← getHeadingBetween(isEnemySmaller2)
+            playerAction.action ← PlayerActions.FIRETORPEDOES
+            attack ← attack + 1
+            isAction ← 1
+            END IF
+            ELSE IF (attack = 1) THEN
+                attack ← 0
+            END IF
+        END IF
+    END IF
+
+
+{Get food while being chased}
+
+    IF (
+    closestFood NOT NULL AND
+    runAwayF > 0 AND
+    isAction = 0
+    ) THEN
+        playerAction.action ← PlayerActions.FORWARD
+        runAwayF ← 0
+        isAction ← 1
+    END IF
+
+
+{Finding best area to move to}
+
+    // get food heading based on scanning
+    var scanFood ←  gameState.getGameObjects().stream()
+                    .filter(gameObject -> gameObject.gameObjectType = ObjectTypes.FOOD OR gameObject.gameObjectType = ObjectTypes.SUPERFOOD)
+                    .filter(gameObject -> (isInSight(headingPref, gameObject, 30)))
+                    .collect(Collectors.toList());
+
+    IF (
+    (scanFood NOT NULL AND 
+    this.gameState.world.getCurrentTick() < 600 AND
+    prevsize < this.bot.size AND
+    runAwayF = 0 AND
+    isAction = 0)
+    ) THEN
+        minDistanceF ← 1000
+        index ← 0
+        IF (scanFood.size() > 0) THEN
+            FOR (i ← 0 : i < scanFood.size()) DO
+                IF (getDistanceBetween(scanFood.get(i), this.bot) < minDistanceF) THEN
+                    minDistanceF ← getDistanceBetween(scanFood.get(i), this.bot)
+                    index ← i
+                END IF
+                i ← i + 1
+            END FOR
+            LET closestScanFood ← scanFood.get(index)
+            playerAction.heading ← getHeadingBetween(closestScanFood)
+            playerAction.action ← PlayerActions.FORWARD
+            minDistanceF ← 1000
+            isAction ← 1
+        END IF
+    END IF
+
+
+{Kamikaze when there is no more food}
+
+    // closest enemy var
+    LET closestEnemy ←  gameState.getPlayerGameObjects().stream()
+                        .filter(bot -> bot.id NOT this.bot.id)
+                        .min(Comparator.comparing(bot -> getDistanceBetween(bot, this.bot) - bot.size - this.bot.size))
+                        .orElse(NULL)
+
+    // check if there is an object that can block shooting (kamikaze)
+    LET isObjectInFrontK ←  gameState.getGameObjects().stream()
+                            .filter(gameObject -> closestEnemy NOT null)
+                            .filter(gameObject -> gameObject.gameObjectType = ObjectTypes.WORMHOLE OR gameObject.gameObjectType = ObjectTypes.ASTEROIDFIELD OR gameObject.gameObjectType = ObjectTypes.GASCLOUD)
+                            .filter(gameObject -> (isInSight(getHeadingBetween(closestEnemy), gameObject, 30)))
+                            .collect(Collectors.toList())  
+
+    IF (
+    closestFood = NULL AND
+    isAction = 0
+    ) THEN
+        minDistance ← 1000
+        IF (isObjectInFrontK.size() > 0) THEN
+            FOR (i ← 0 : i < isObjectInFrontK.size()) DO
+                IF (getDistanceBetween(isObjectInFrontK.get(i), this.bot) < minDistance) THEN
+                    minDistance ← getDistanceBetween(isObjectInFrontK.get(i), this.bot)
+                END IF
+                i ← i + 1
+            END FOR
+        END IF
+        // check if there is an object that can block shooting
+        IF (minDistance - this.bot.size < getDistanceBetween(closestEnemy, this.bot) - this.bot.size - closestEnemy.size) THEN
+            minDistance ← 1000
+        END IF
+        ELSE
+            playerAction.heading ← getHeadingBetween(closestEnemy)
+            playerAction.action ← PlayerActions.FIRETORPEDOES
+            isAction ← 1
+    END IF
+
+
+{Default food prevent bug under 5 ticks}
+
+    // closest food
+    LET closestFood ←   gameState.getGameObjects().stream()
+                        .filter(gameObject -> gameObject.gameObjectType = ObjectTypes.FOOD OR gameObject.gameObjectType = ObjectTypes.SUPERFOOD)
+                        .min(Comparator.comparing(gameObject -> getDistanceBetween(gameObject, this.bot)))
+                        .orElse(NULL)
+
+    IF (
+    currentTick < 5 AND 
+    prevsize > this.bot.size AND
+    closestFood NOT NULL
+    ) THEN
+        playerAction.heading ← getHeadingBetween(closestFood)
+        playerAction.action ← PlayerActions.FORWARD
+        isAction ← 1
+    END IF
+
+
+{Default action}
+    IF (isAction = 0) THEN
+        playerAction.action ← PlayerActions.FORWARD
+        isAction ← 1
+    END IF
+
+
+
+FUNGSI LAIN
+// function if object is in sight or no
+    FUNCTION isInSight(heading : integer, gameObject : GameObject, vision : integer) → boolean 
+        vision RETURN vision / 2
+        IF (heading >= vision AND heading <= 360 - vision) THEN
+            IF (getHeadingBetween(gameObject) >= (heading - vision)%360 AND getHeadingBetween(gameObject) <= (heading + vision)%360) THEN
+                RETURN TRUE
+            END IF
+        END IF
+        ELSE IF (heading < vision) THEN
+            IF ((getHeadingBetween(gameObject) <= (heading + vision) AND getHeadingBetween(gameObject) >= 0) OR (360 - vision + heading <= getHeadingBetween(gameObject) AND getHeadingBetween(gameObject) <= 360)) THEN
+                RETURN TRUE
+            END IF
+        END IF
+        ELSE IF (heading > 360 - vision) THEN
+            IF ((getHeadingBetween(gameObject) >= (heading - vision) AND getHeadingBetween(gameObject) <= 360) OR (360 - vision + heading <= getHeadingBetween(gameObject) AND getHeadingBetween(gameObject) <= 360)) THEN
+                RETURN TRUE
+            END IF
+        END IF
+        RETURN FALSE;
+    
+
+
+// detect if torpedo is heading towards us
+FUNCTION isEnemyTorpedo(gameObject) -> boolean
+    // Get our position
+    LET x ← this.bot.getPosition().x
+    LET y ← this.bot.getPosition().y
+    
+    // Get torpedo position
+    LET x2 ← gameObject.getPosition().x
+    LET y2 ← gameObject.getPosition().y
+    
+    // Get torpedo heading
+    LET heading ← gameObject.currentHeading
+    
+    // Check IF the torpedo is heading towards us
+    IF (x2 > x AND y2 > y) THEN
+        IF (heading >= 180 AND heading <= 270) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 < x AND y2 > y) THEN
+        IF (heading >= 270 AND heading <= 360) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 < x AND y2 < y) THEN
+        IF (heading >= 0 AND heading <= 90) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 > x AND y2 < y) THEN
+        IF (heading >= 90 AND heading <= 180) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 > x AND y2 = y) THEN
+        IF (heading = 180) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 < x AND y2 = y) THEN
+        IF (heading = 0) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 = x AND y2 > y) THEN
+        IF (heading = 270) THEN
+            RETURN TRUE
+        END IF
+    ELSE IF (x2 = x AND y2 < y) THEN
+        IF (heading = 90) THEN
+            RETURN TRUE
+        END IF
+    END IF
+    
+    RETURN FALSE
+
+// scan list of object
+FUNCTION scanObject() -> integer 
+    vision ← 30
+    List<Double> scoringList ← new ArrayList<Double>()
+    FOR (i ← 0 : i < 360/vision) DO
+        headingStart ← i * vision
+        headingEnd ← headingStart + vision
+        scoreSum ← 0
+
+        //collect food list
+        List<GameObject> foodList ← gameState.getGameObjects()
+                                    .stream().filter(item -> item.getGameObjectType() = ObjectTypes.FOOD)
+                                    .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
+                                    .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                    .sorted(Comparator
+                                            .comparing(item -> getDistanceBetween(this.bot, item)))
+                                    .collect(Collectors.toList())
+        FOR (j ← 0 : j < foodList.size()) DO
+            scoreSum ← scoreSum + 20 / getDistanceBetween(this.bot, foodList.get(j))
+            j ← j + 1
+        END FOR
+
+        //collect superfood list
+        List<GameObject> superfoodList ←    gameState.getGameObjects()
+                                            .stream().filter(item -> item.getGameObjectType() = ObjectTypes.SUPERFOOD)
+                                            .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
+                                            .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                            .sorted(Comparator
+                                                    .comparing(item -> getDistanceBetween(this.bot, item)))
+                                            .collect(Collectors.toList())
+        FOR (int j = 0 : j < superfoodList.size()) DO
+            scoreSum ← scoreSum + 21 / getDistanceBetween(this.bot, superfoodList.get(j))
+            j ← j + 1
+        END FOR
+
+        //collect obstacles list
+        List<GameObject> gasCloudList ← gameState.getGameObjects()
+                                        .stream().filter(item -> item.getGameObjectType() = ObjectTypes.GASCLOUD OR item.getGameObjectType() = ObjectTypes.SUPERNOVABOMB)
+                                        .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
+                                        .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                        .sorted(Comparator
+                                                .comparing(item -> getDistanceBetween(this.bot, item)))
+                                        .collect(Collectors.toList())
+        FOR (int j = 0 : j < gasCloudList.size()) DO
+            scoreSum ← scoreSum - 10 / getDistanceBetween(this.bot, gasCloudList.get(j))
+            j ← j + 1
+        END FOR
+        
+        //collect asteroid list
+        List<GameObject> asteroidList ← gameState.getGameObjects()
+                                        .stream().filter(item -> item.getGameObjectType() = ObjectTypes.ASTEROIDFIELD || item.getGameObjectType() == ObjectTypes.TORPEDOSALVO)
+                                        .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
+                                        .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                        .sorted(Comparator
+                                                .comparing(item -> getDistanceBetween(this.bot, item)))
+                                        .collect(Collectors.toList())
+        for (j ← 0 : j < asteroidList.size()) DO
+            scoreSum ← scoreSum - 5 / getDistanceBetween(this.bot, asteroidList.get(j))
+            j ← j + 1
+        END FOR
+
+        //collect wormhole list
+        List<GameObject> wormholeList ← gameState.getGameObjects()
+                                        .stream().filter(item -> item.getGameObjectType() = ObjectTypes.WORMHOLE)
+                                        .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
+                                        .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                        .sorted(Comparator
+                                                .comparing(item -> getDistanceBetween(this.bot, item)))
+                                        .collect(Collectors.toList())
+        FOR (j ← 0 : j < wormholeList.size()) DO
+            scoreSum ← scoreSum - 10 / getDistanceBetween(this.bot, wormholeList.get(j))
+            j ← j + 1
+        END FOR
+
+        // collect bigger enemy list
+        List<GameObject> enemyBiggerList ←  gameState.getGameObjects()
+                                            .stream().filter(item -> item.getGameObjectType() = ObjectTypes.PLAYER)
+                                            .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + item.size)
+                                            .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                            .sorted(Comparator
+                                                    .comparing(item -> getDistanceBetween(this.bot, item)))
+                                            .collect(Collectors.toList())
+        FOR (j ← 0 : j < enemyBiggerList.size()) DO
+            scoreSum ← scoreSum - 20 / getDistanceBetween(this.bot, enemyBiggerList.get(j))
+            j ← j + 1
+        END FOR
+
+        // collect smaller enemy list
+        List<GameObject> enemySmallerList ← gameState.getGameObjects()
+                                            .stream().filter(item -> item.getGameObjectType() = ObjectTypes.PLAYER)
+                                            .filter(item -> getDistanceBetween(this.bot, item) < (this.gameState.world.radius*0.5) + this.bot.size + bot.size)
+                                            .filter(item -> getHeadingBetween(item) >= headingStart AND getHeadingBetween(item) <= headingEnd)
+                                            .filter(item -> item.size < this.bot.size)
+                                            .sorted(Comparator
+                                                    .comparing(item -> getDistanceBetween(this.bot, item)))
+                                            .collect(Collectors.toList());
+        FOR (j ← 0 : j < enemySmallerList.size()) DO
+            scoreSum ← scoreSum - 10 / getDistanceBetween(this.bot, enemySmallerList.get(j))
+            j ← j + 1
+        END FOR
+
+        scoringList.add(scoreSum);
+        i ← i + 1
+    END FOR
+
+    //calculate the best direction
+    maxScore ← 0
+    maxScoreIndex ← 0
+    FOR (i ← 0 : i < scoringList.size()) DO
+        IF (scoringList.get(i) > maxScore) THEN
+            maxScore ← scoringList.get(i)
+            maxScoreIndex ← i
+        END IF
+        i ← i + 1
+    END FOR
+    RETURN (maxScoreIndex+1) * vision - (vision/2)
